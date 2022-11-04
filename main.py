@@ -334,6 +334,7 @@ def extendResult():
 def push(body):
     print('- body: %s \n- waiting for push result' % body)
     # bark push
+    body = URL_BASE + ' - ' + USER_ID + '\n\n' + body
     if BARK_KEY == '':
         print('*** No BARK_KEY ***')
     else:
@@ -348,7 +349,6 @@ def push(body):
     if TG_BOT_TOKEN == '' or TG_USER_ID == '':
         print('*** No TG_BOT_TOKEN or TG_USER_ID ***')
     else:
-        body = URL_BASE + '\n\n' + body
         server = 'https://api.telegram.org'
         tgurl = server + '/bot' + TG_BOT_TOKEN + '/sendMessage'
         rq_tg = requests.post(tgurl, data={'chat_id': TG_USER_ID, 'text': body}, headers={
@@ -359,8 +359,7 @@ def push(body):
             print('*** tg push fail! ***', rq_tg.content.decode('utf-8'))
     if FEISHU_TOKEN == '' :
         print('*** No FEISHU_TOKEN ***')
-    else: 
-        body = URL_BASE + '\n\n' + body
+    else:        
         server = 'https://open.feishu.cn'
         fsurl = server + '/open-apis/bot/v2/hook/' + FEISHU_TOKEN
         rq_fs = requests.post(fsurl, data=json.dumps({"msg_type":"text","content":{"text": body}}), headers={
@@ -420,7 +419,7 @@ body = ''
 
 print('- loading...')
 if URL_BASE != '' and '/' not in URL_BASE:
-    driver = uc.Chrome(use_subprocess=True, version_main=105)
+    driver = uc.Chrome(use_subprocess=True)
     driver.set_window_size(785, 627)
     driver.set_page_load_timeout(30)
     set_driver(driver)
