@@ -1,433 +1,386 @@
-# -*- coding: utf-8 -*-
 # https://github.com/mybdye 🌟
 
-import base64
-import os
-import ssl
-import json
-import time
-import urllib
-import requests
-import subprocess
-import undetected_chromedriver as uc
 
-from helium import *
-from selenium.webdriver.common.by import By
+import os, requests, urllib, pydub, base64, ssl, random, json
+from seleniumbase import SB
+from func_timeout import func_set_timeout, FunctionTimedOut
+from urllib.parse import quote
+import pyscreenshot as ImageGrab
 
-# 关闭证书验证
-ssl._create_default_https_context = ssl._create_unverified_context
-
-try:
-    URL_BASE = os.environ['URL_BASE']
-except:
-    # 本地调试用， please type here the website address without any 'https://' or '/'
-    URL_BASE = ''
-
-try:
-    USER_ID = os.environ['USER_ID']
-except:
-    # 本地调试用
-    USER_ID = ''
-
-try:
-    PASS_WD = os.environ['PASS_WD']
-except:
-    # 本地调试用
-    PASS_WD = ''
-
-try:
-    BARK_KEY = os.environ['BARK_KEY']
-except:
-    # 本地调试用
-    BARK_KEY = ''
-
-try:
-    TG_BOT_TOKEN = os.environ['TG_BOT_TOKEN']
-except:
-    # 本地调试用
-    TG_BOT_TOKEN = ''
-
-try:
-    TG_USER_ID = os.environ['TG_USER_ID']
-except:
-    # 本地调试用
-    TG_USER_ID = ''
-
-try:
-    FEISHU_TOKEN = os.environ['FEISHU_TOKEN']
-except:
-    # 本地调试用
-    FEISHU_TOKEN = ''    
-
-
-def urlDecode(s):
-    return str(base64.b64decode(s + '=' * (4 - len(s) % 4))).split('\'')[1]
-
-def mp3ToWave():
-    print('- Func mp3 to wave...')
-    subprocess.call(['ffmpeg', '-i', os.getcwd() + audioFile, os.getcwd() + waveFile, '-loglevel', 'quiet', '-y'])
-    print('- Func mp3 to wave done!')
-
-
-def speechToText():
-    mp3ToWave()
-    response = ''
-    i = 0
-    while ' -' not in response:
-        print('- Func SpeechToText')
-        driver.tab_new(urlSpeech)
-        delay(2)
-        driver.switch_to.window(driver.window_handles[1])
-        print('- Switched to window SpeechToText')
-        wait_until(Text('Speech to text').exists)
-        scroll_down(num_pixels=1200)
-        i = i + 1
-        if i > 3:
-            print('*** speechToText issue! ***')
-            break
-        #attach_file(os.getcwd() + audioFile, to=S('#uploadbtn'))
-        driver.find_element(By.ID, 'fileinput').send_keys(os.getcwd() + waveFile)
-        print('- waiting for transcribe')
-        delay(10)
-        try:
-            driver.switch_to.alert()
-            Alert.accept()
-            print('- Alert accept')
-        except:
-            pass
-        textlist = find_all(S('#speechout'))
-        response = [key.web_element.text for key in textlist][0]
-        print('- response:', response)
-        text = response.split('-'*80)[1].split('\n')[1].replace('. ', '.')
-        print('- text:', text)
-    driver.close()
-    return text
-
-
-def getAudioLink():
-    global block, body
-    print('- audio file link searching...')
-    if Text('Alternatively, download audio as MP3').exists() or Text('或者以 MP3 格式下载音频').exists():
-        block = False
-        try:
-            src = Link('Alternatively, download audio as MP3').href
-        except:
-            src = Link('或者以 MP3 格式下载音频').href
-        print('- get src:', src)
-        # 下载音频文件
-        try:
-            urllib.request.urlretrieve(src, os.getcwd() + audioFile)
-        except Exception as e:
-            print('*** 💣 getAudioLink function Error: %s \n try again' % e)
-            urllib.request.urlretrieve(src, os.getcwd() + audioFile)
-        delay(4)
-        text = speechToText()
-        print('- waiting for switch to first window')
-        driver.switch_to.window(driver.window_handles[0])
-        # delay(3)
-        set_driver(driver)
-        wait_until(S('#audio-response').exists)
-        print('- fill audio response')
-        write(text, into=S('#audio-response'))
-        # delay(3)
-        wait_until(S('#recaptcha-verify-button').exists)
-        print('- click recaptcha-verify-button')
-        click(S('#recaptcha-verify-button'))
-        delay(3)
-        if Text('Multiple correct solutions required - please solve more.').exists() or Text(
-                '需要提供多个正确答案 - 请回答更多问题。').exists():
-            print('*** Multiple correct solutions required - please solve more. ***')
-            print('- click recaptcha-reload-button')
-            click(S('#recaptcha-reload-button'))
-            getAudioLink()
-        delay(1)
-
-    elif Text('Try again later').exists() or Text('稍后重试').exists():
-        textblock = S('.rc-doscaptcha-body-text').web_element.text
-        #print(textblock)
-        body = ' *** 💣 Possibly blocked by google! ***\n' + textblock
-        block = True
-
-    elif not CheckBox('I\'m not a robot').is_checked() or CheckBox('我不是机器人').is_checked():
-        print('*** checkbox issue ***')
-        reCAPTCHA()
-
-    else:
-        print('*** audio download element not found, stop running ***')
-        # screenshot() # debug
-
-
-def reCAPTCHA():
-    global block
-    print('- click checkbox')
-    click(S('.recaptcha-checkbox-borderAnimation'))
-    # screenshot() # debug
-    delay(4)
-    if S('#recaptcha-audio-button').exists():
-        print('- audio button found')
-        click(S('#recaptcha-audio-button'))
-        # screenshot() # debug
-        delay(4)
-        getAudioLink()
-        return block
-
-
-def cloudflareDT():
+@func_set_timeout(30)
+def urlOpen(url):
     try:
-        i = 0
-        while Text('Checking your browser before accessing').exists():
-            i = i + 1
-            print('*** cloudflare 5s detection *** ', i)
-            time.sleep(1)
-        if i > 0:
-            print('*** cloudflare 5s detection finish! ***')
+        print('- url open:', url)
+        sb.open(url)
+        print('- func url open finish')
+    except FunctionTimedOut as e:
+        print('- 👀 url open:', e)
+   
+
+def checkbox():
+    print('- click checkbox')
+    checkbox = 'span#recaptcha-anchor'
+    try:
+        sb.wait_for_element(checkbox)
+        sb.click(checkbox)
+        sb.sleep(4)
+    except FunctionTimedOut as e:
+        print('- 👀 checkbox:', e)
+    
+    
+def recaptcha():
+    global body
+    print('- recaptcha')
+    try:
+        #sb.open(urlLogin)
+        urlOpen(urlLogin)
+        sb.assert_text('Login', 'h2', timeout=20)
+        print('- access')
     except Exception as e:
-        print('*** 💣 CFDT Error:', e)
+        print('- 👀 sb.open() issue:', e, '\n try again!')
+        sb.driver.close()
+        #sb.open(urlLogin)
+        urlOpen(urlLogin)
+        sb.assert_text('Login', 'h2', timeout=20)
+        print('- access')
+    #   reCAPTCHA
+    sb.switch_to_frame('[src*="/recaptcha/api2/anchor?"]')
+    print('- switch to frame checkbox')
+    checkbox()
+    try:
+        #   预防弹了广告
+        sb.switch_to_window(0)
+        sb.switch_to_frame('[src*="/recaptcha/api2/anchor?"]')
+    except Exception as e:
+        print('- 👀 switch issue:', e)
+    status = checkbox_status()
+    tryReCAPTCHA = 1
+    while status != 'true':
+        sb.switch_to_default_content()  # Exit all iframes
+        sb.sleep(1)
+        sb.switch_to_frame('[src*="/recaptcha/api2/bframe?"]')
+        print('- switch to frame image/audio')
+        sb.click("button#recaptcha-audio-button")
+        try:
+            sb.assert_element('[href*="/recaptcha/api2/payload/audio.mp3?"]', timeout=20)
+            print('- normal')
+            src = sb.find_elements('[href*="/recaptcha/api2/payload/audio.mp3?"]'
+                                   )[0].get_attribute("href")
+            print('- audio src:', src)
+            # download audio file
+            urllib.request.urlretrieve(src, os.getcwd() + audioMP3)
+            mp3_to_wav()
+            text = speech_to_text()
+            sb.switch_to_window(0)
+            sb.assert_text('Login', 'h2', timeout=20)
+            sb.switch_to_default_content()  # Exit all iframes
+            sb.sleep(1)
+            sb.switch_to_frame('[src*="/recaptcha/api2/bframe?"]')
+            sb.type('#audio-response', text)
+            sb.click('button#recaptcha-verify-button')
+            sb.sleep(4)
+            sb.switch_to_default_content()  # Exit all iframes
+            sb.switch_to_frame('[src*="/recaptcha/api2/anchor?"]')
+            sb.sleep(1)
+            status = checkbox_status()
+
+        except Exception as e:
+            print('- 💣 Exception:', e)
+            body = e
+            sb.switch_to_default_content()  # Exit all iframes
+            sb.sleep(1)
+            sb.switch_to_frame('[src*="/recaptcha/api2/bframe?"]')
+            msgBlock = '[class*="rc-doscaptcha-body-text"]'
+            if sb.assert_element(msgBlock, timeout=20):
+                body = sb.get_text(msgBlock)
+                print('- 💣 maybe block by google\n', body)
+                body = '[%s***]\n💣 %s' % (username[:3], body)
+                break
+            elif tryReCAPTCHA > 3:
+                break
+            else:
+                tryReCAPTCHA += 1
+    if status == 'true':
+        print('- reCAPTCHA solved!')
+        return True
 
 
 def login():
-    delay(1)
-    if Text('Checking').exists():
-        print('- Security Checking...')
-        delay(10)
-
     print('- login')
-    #cloudflareDT()
-    scroll_down(num_pixels=1000)
-    print('- fill user id')
-    if USER_ID == '':
-        print('*** USER_ID is empty ***')
-        kill_browser()
-    else:
-        write(USER_ID, into=S('@username'))
-    print('- fill password')
-    if PASS_WD == '':
-        print('*** PASS_WD is empty ***')
-        kill_browser()
-    else:
-        write(PASS_WD, into=S('@password'))
-    delay(5)
-    if Text('reCAPTCHA').exists() or Text('Recaptcha').exists():
-    # if Text('I\'m not a robot').exists() or Text('我不是机器人').exists():
-        print('- reCAPTCHA found!')
-        block = reCAPTCHA()
-        if not block:
-            submit()
-
-    else:
-        print('- reCAPTCHA not found!')
-        submit()
+    sb.switch_to_default_content()  # Exit all iframes
+    sb.sleep(1)
+    sb.type('#text', username)
+    sb.type('#password', password)
+    sb.click('button:contains("Submit")')
+    sb.sleep(20)
+    sb.assert_exact_text('ACTIVE', '[class*="badge badge-success"]', timeout=20)
+    print('- login success')
+    return True
 
 
-def submit():
-    global body
-    print('- submit')
-    try:
-        click('Submit')
-        print('- submit clicked')
-        delay(2)
-    except Exception as e:
-        print('*** 💣 some error in func submit!, stop running ***\nError:', e)
-
-    #cloudflareDT()
-    scroll_down(num_pixels=600)
-    try:
-        wait_until(Text('Please correct your captcha!.').exists)
-        print('*** Network issue maybe, reCAPTCHA load fail! ***')
-    except:
-        pass
-    try:
-        wait_until(Text('Invalid').exists)
-        print('*** Invalid Username / Password ! ***')
-    except:
-        pass
-    try:
-        wait_until(Text('VPS Information').exists)
-        print('- VPS Information found!')
-        textList = find_all(S('.col-sm-7'))
-        status = [key.web_element.text for key in textList][1]
-        print('- Status: ', status)
-        go_to(urlRenew)
-        renewVPS()
-    except Exception as e:
-        print('*** 💣 submit Error:', e)
-        screenshot()  # debug
-        body = e
-
-def delay(i):
-    time.sleep(i)
+def checkbox_status():
+    print('- checkbox_status')
+    statuslist = sb.find_elements('#recaptcha-anchor')
+    # print('- statuslist:', statuslist)
+    status = statuslist[0].get_attribute('aria-checked')
+    print('- status:', status)
+    return status
 
 
-def screenshot():  # debug
-    driver = get_driver()
-    driver.get_screenshot_as_file(os.getcwd() + imgFile)
-    print('- screenshot done')
-    start_chrome()
-    driver = get_driver()
-    go_to('http://imgur.com/upload')
-    #driver.execute_script('''window.open('http://imgur.com/upload',"_blank")''')
-    #switch_to('Imgur')
-    time.sleep(5)
-    driver.find_element(By.ID, 'file-input').send_keys(os.getcwd() + imgFile)
-    time.sleep(5)
-    wait_until(Text('POST').exists)
-    print('- img uploaded and the 📷 capture src is:', driver.current_url)
-    driver.close()
+def mp3_to_wav():
+    print('- mp3_to_wav')
+    pydub.AudioSegment.from_mp3(
+        os.getcwd() + audioMP3).export(
+        os.getcwd() + audioWAV, format="wav")
+    print('- mp3_to_wav done')
 
 
-def renewVPS():
-    global body
-    print('- renew VPS')
-    #go_to(urlRenew)
-    delay(1)
-    cloudflareDT()
-    delay(1)
-    if S('#web_address').exists():
-        print('- fill web address')
-        write(URL_BASE, into=S('#web_address'))
-        # 过 CAPTCHA
-        captcha = funcCAPTCHA()
-        print('- fill captcha result')
-        write(captcha, into=S('@captcha'))
-        print('- check agreement')
-        click(S('@agreement'))
-        delay(1)
-        click('Renew VPS')
-        body = extendResult()
-        #print('- result:', body)
-    else:
-        print(' *** 💣 some error in func renew!, stop running ***')
-        # screenshot()
-
-def renewCheck():
-    global renew, body
-    #print('- body now:', body)
-    if 'Robot verification failed' in body:
-        while renew < 10:
-            renew = renew + 1
-            print('*** %s %d ***' % (body, renew))
-            refresh()
-            renewVPS()
-            if 'renewed' in body:
-                body = '🎉 ' + body
+def speech_to_text():
+    print('- speech_to_text')
+    sb.open_new_window()
+    text = ''
+    trySpeech = 1
+    while trySpeech <= 3:
+        print('- trySpeech *', trySpeech)
+        sb.open(urlSpeech)
+        sb.assert_text('Speech to text', 'h1', timeout=20)
+        sb.choose_file('input[type="file"]', os.getcwd() + audioWAV)
+        sb.sleep(8)
+        response = sb.get_text('[id*="speechout"]')
+        print('- response:', response)
+        try:
+            text = response.split('-' * 80)[1].split('\n')[1].replace('. ', '.')
+            print('- text:', text)
+            if ' ' in text:
                 break
-    elif 'renewed' in body:
-        body = '🎉 ' + body
-        #print(body)
+        except Exception as e:
+            print('- 💥 speech2text:', e)
+        trySpeech += 1
+    return text
 
-def extendResult():
+
+def renew():
+    global statuRenew
+    print('- renew')
+    #sb.open(urlRenew)
+    urlOpen(urlRenew)
+    sb.sleep(2)
+    #screenshot()
+    #sb.switch_to_window(0)
+    sb.assert_text('Renew VPS', 'h2', timeout=10)
+    print('- access')
+    #
+    print('- fill web_address')
+    sb.type('#web_address', urlBase)
+    #   captcha
+    number1 = int(sb.find_elements('img[src]')[0].get_attribute('src').split('-')[1][0])
+    number2 = int(sb.find_elements('img[src]')[1].get_attribute('src').split('-')[1][0])
+    method = sb.get_text('[class*="col-sm-3"]').split('=')[0]
+
+    if method == '+':
+        captcharesult = number1 + number2
+    elif method == '-':
+        # 应该没有 但还是写了
+        captcharesult = number1 - number2
+    elif method == 'X' or method == 'x':
+        captcharesult = number1 * number2
+    elif method == '/':
+        # 应该没有 但还是写了
+        captcharesult = number1 / number2
+
+    captcharesult = int(captcharesult)
+    print('- captcharesult: %d %s %d = %d' % (number1, method, number2, captcharesult))
+    #
+    sb.sleep(random.randint(1,3))
+    print('- fill captcha')
+    sb.type('#captcha', captcharesult)
+    #
+    sb.sleep(random.randint(1,3))
+    print('- check agreement')
+    sb.click('[name*="agreement"]')
+    #
+    sb.sleep(random.randint(1,3))
+    print('- click Renew VPS')
+    sb.click('button:contains("Renew VPS")')
+    sb.sleep(8)
+    statuRenew = renew_check()
+
+
+def renew_check():
+    global body, countRenew
+    print('- renew_check')
+    sb.assert_element('div#response', timeout=20)
+    print('- access')
+    body = sb.get_text('div#response')
+    i = 1
+    while body == 'Loading.....':
+        if i > 3:
+            break
+        print('- waiting for response... *', i)
+        sb.sleep(2)
+        body = sb.get_text('div#response')
+        i += 1
+    print('- response [After %d run(s)]: %s' % (countRenew, body))
+    if 'renew' in body:
+        body = '[%s***][After %d run(s)]\n🎉 %s' % (username[:3], countRenew, body)
+        return True
+    else:
+        body = '[%s***][After %d run(s)]\n💣 %s' % (username[:3], countRenew, body)
+
+
+
+def screenshot():
     global body
-    print('- waiting for extend result response')
-    delay(15)
-    scroll_down(num_pixels=600)
-    try:
-        textList = find_all(S('#response'))
-        body = str([key.web_element.text for key in textList][0])
-        #print('extendResult:', result)
-        delay(1)
-        return body
-    except Exception as e:
-        print('*** 💣 extendResult Error:', e)
-        screenshot()
+    print('- screenshot')
+    # grab fullscreen
+    im = ImageGrab.grab()
+    # save image file
+    im.save("fullscreen.png")
+    
+    #sb.save_screenshot(imgFile, folder=os.getcwd())
+    print('- screenshot done')
+    sb.open_new_window()
+    print('- screenshot upload')
+    sb.open('http://imgur.com/upload')
+    # sb.choose_file('input[type="file"]', os.getcwd() + '/' + imgFile)
+    sb.choose_file('input[type="file"]', "fullscreen.png")
+    sb.sleep(6)
+    imgUrl = sb.get_current_url()
+    i = 1
+    while not '/a/' in imgUrl:
+        if i > 3:
+            break
+        print('- waiting for url... *', i)
+        sb.sleep(2)
+        imgUrl = sb.get_current_url()
+        i += 1
+    print('- 📷 img url:', imgUrl)
+    body = imgUrl
+    print('- screenshot upload done')
+
+    return imgUrl
+
+
+def url_decode(s):
+    return str(base64.b64decode(s + '=' * (4 - len(s) % 4))).split('\'')[1]
 
 
 def push(body):
     print('- body: %s \n- waiting for push result' % body)
-    # bark push
-    body = URL_BASE + ' - ' + USER_ID + '\n\n' + body
-    if BARK_KEY == '':
-        print('*** No BARK_KEY ***')
-    else:
-        barkurl = 'https://api.day.app/' + BARK_KEY
-        title = URL_BASE
-        rq_bark = requests.get(url=f'{barkurl}/{title}/{body}?isArchive=1')
-        if rq_bark.status_code == 200:
-            print('- bark push Done!')
-        else:
-            print('*** bark push fail! ***', rq_bark.content.decode('utf-8'))
+    
     # tg push
-    if TG_BOT_TOKEN == '' or TG_USER_ID == '':
+    if tgBotToken == '' or tgUserID == '':
         print('*** No TG_BOT_TOKEN or TG_USER_ID ***')
     else:
+        tgbody = urlBase + '\n\n' + body
         server = 'https://api.telegram.org'
-        tgurl = server + '/bot' + TG_BOT_TOKEN + '/sendMessage'
-        rq_tg = requests.post(tgurl, data={'chat_id': TG_USER_ID, 'text': body}, headers={
+        tgurl = server + '/bot' + tgBotToken + '/sendMessage'
+        rq_tg = requests.post(tgurl, data={'chat_id': tgUserID, 'text': tgbody}, headers={
             'Content-Type': 'application/x-www-form-urlencoded'})
         if rq_tg.status_code == 200:
             print('- tg push Done!')
         else:
             print('*** tg push fail! ***', rq_tg.content.decode('utf-8'))
+            
+    # bark push
+    if barkToken == '':
+        print('*** No BARK_KEY ***')
+    else:
+        barkurl = 'https://api.day.app/' + barkToken
+        barktitle = quote(urlBase, safe='')
+        barkbody = quote(body, safe='')
+        rq_bark = requests.get(url=f'{barkurl}/{barktitle}/{barkbody}?isArchive=1')
+        if rq_bark.status_code == 200:
+            print('- bark push Done!')
+        else:
+            print('*** bark push fail! ***', rq_bark.content.decode('utf-8'))
+    
+
     if FEISHU_TOKEN == '' :
         print('*** No FEISHU_TOKEN ***')
-    else:        
+    else: 
+        fsbody = urlBase + '\n\n' + body       
         server = 'https://open.feishu.cn'
         fsurl = server + '/open-apis/bot/v2/hook/' + FEISHU_TOKEN
-        rq_fs = requests.post(fsurl, data=json.dumps({"msg_type":"text","content":{"text": body}}), headers={
+        rq_fs = requests.post(fsurl, data=json.dumps({"msg_type":"text","content":{"text": fsbody}}), headers={
             "Content-Type": "application/json"})
         if rq_fs.status_code == 200:
             print('- fs push Done!')
         else:
             print('*** fs push fail! ***', rq_fs.content.decode('utf-8'))
+    print('- push finish!')
 
-
-
-    print('- finish!')
-    # kill_browser()
-
-
-def funcCAPTCHA():
-    print('- do CAPTCHA')
-    divList = find_all(S('.col-sm-3'))
-    # 取计算方法
-    method = [key.web_element.text for key in divList][0][0]
-    # Helium 下没有好的方法拿到两个小图片的 src，切换到 selenium
-    # driver = get_driver()
-    number1 = int(
-        driver.find_element(By.XPATH, '//*[@id="form-submit"]/div[2]/div[1]/img[1]').get_attribute('src').split('-')[1][
-            0])
-    number2 = int(
-        driver.find_element(By.XPATH, '//*[@id="form-submit"]/div[2]/div[1]/img[2]').get_attribute('src').split('-')[1][
-            0])
-
-    if method == '+':
-        captcha_result = number1 + number2
-    elif method == '-':
-        # 应该没有 但还是写了
-        captcha_result = number1 - number2
-    elif method == 'X':
-        captcha_result = number1 * number2
-    elif method == '/':
-        # 应该没有 但还是写了
-        captcha_result = number1 / number2
-    print('- captcha result: %d %s %d = %s' % (number1, method, number2, captcha_result))
-    return captcha_result
 
 ##
-audioFile = '/' + URL_BASE + '.mp3'
-waveFile = '/' + URL_BASE + '.wav'
-imgFile = '/' + URL_BASE + '.png'
+try:
+    urlBase = os.environ['URL_BASE']
+except:
+    # 本地调试用， please type here the website address without any 'https://' or '/'
+    urlBase = ''
+try:
+    username = os.environ['USER_ID']
+except:
+    # 本地调试用
+    username = ''
+try:
+    password = os.environ['PASS_WD']
+except:
+    # 本地调试用
+    password = ''
+try:
+    barkToken = os.environ['BARK_TOKEN']
+except:
+    # 本地调试用
+    barkToken = ''
+try:
+    tgBotToken = os.environ['TG_BOT_TOKEN']
+except:
+    # 本地调试用
+    tgBotToken = ''
+try:
+    tgUserID = os.environ['TG_USER_ID']
+except:
+    # 本地调试用
+    tgUserID = ''
+try:
+    FEISHU_TOKEN = os.environ['FEISHU_TOKEN']
+except:
+    # 本地调试用
+    FEISHU_TOKEN = ''       
 ##
-urlLogin = 'https://' + URL_BASE + '/login'
-urlRenew = 'https://' + URL_BASE + '/vps-renew'
-##
-urlSpeech = urlDecode('aHR0cHM6Ly9henVyZS5taWNyb3NvZnQuY29tL2VuLXVzL3Byb2R1Y3RzL2NvZ25pdGl2ZS1zZXJ2aWNlcy9zcGVlY2gtdG8tdGV4dC8jZmVhdHVyZXM==')
-##
-block = False
-renew = 0
 body = ''
+statuRenew = False
+countRenew = 1
+audioMP3 = '/' + urlBase + '.mp3'
+audioWAV = '/' + urlBase + '.wav'
+# imgFile = urlBase + '.png'
 ##
+urlLogin = 'https://' + urlBase + '/login'
+urlRenew = 'https://' + urlBase + '/vps-renew'
+urlSpeech = url_decode(
+    'aHR0cHM6Ly9henVyZS5taWNyb3NvZnQuY29tL2VuLXVzL3Byb2R1Y3RzL2NvZ25pdGl2ZS1zZXJ2aWNlcy9zcGVlY2gtdG8tdGV4dC8jZmVhdHVyZXM==')
+# 关闭证书验证
+ssl._create_default_https_context = ssl._create_unverified_context
 
-print('- loading...')
-if URL_BASE != '' and '/' not in URL_BASE:
-    driver = uc.Chrome(use_subprocess=True)
-    driver.set_window_size(785, 627)
-    driver.set_page_load_timeout(30)
-    set_driver(driver)
-    go_to(urlLogin)
-    delay(1)
-    login()
-    renewCheck()
-    push(body)
-else:
-    print('*** [URL_BASE] is missing or wrong! ***')
+with SB(uc=True, pls="none", sjw=True) as sb:  # By default, browser="chrome" if not set.
+    print('- 🚀 loading...')
+    if urlBase != '' and username != '' and password != '':
+        try:
+            if recaptcha():
+                if login():
+                    while not statuRenew:
+                        if countRenew > 15:
+                            break
+                        renew()
+                        countRenew += 1
+        except Exception as e:
+            print('- 💥', e)
+            try:
+                screenshot()
+            finally:
+                push(str(e))
+        push(body)
+    else:
+        print('- please check urlBase/username/password')
 
+# END
