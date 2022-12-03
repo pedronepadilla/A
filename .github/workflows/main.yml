@@ -32,7 +32,7 @@ jobs:
            
         - name: 'Renew-H'
           env:
-            URL_BASE: ${{ secrets.URL_BASE_H }}
+            URL_BASE: ${{ secrets.URL_BASE_W }}
             USER_ID: ${{ secrets.USER_ID_18 }}
             PASS_WD: ${{ secrets.PASS_WD }}
             BARK_KEY: ${{ secrets.BARK_KEY }}
