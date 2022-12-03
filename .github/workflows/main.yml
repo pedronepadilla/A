@@ -10,26 +10,29 @@ on:
 
 jobs:
   H:
-    runs-on: macos-12
-    env:
-      HOMEBREW_NO_INSTALL_CLEANUP: 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
         - name: 'Checkout codes'
-          uses: actions/checkout@v2
+          uses: actions/checkout@v3
           
-        - name: ' Environment Settings'
+        - name: Setup FFmpeg using versions
+          uses: Iamshankhadeep/setup-ffmpeg@v1.2
+          with:
+          # Not strictly necessary, but it may prevent rate limit
+          # errors especially on GitHub-hosted macos machines.
+           token: ${{ secrets.GITHUB_TOKEN }}
+        
+        - name: Setup Environment
           run: |
-            brew upgrade --cask google-chrome
-            brew install ffmpeg
-            pip3 install -r ./requirements.txt
-            pip3 install undetected-chromedriver
-            yes | pip3 uninstall selenium
-            pip3 install selenium==4.2.0            
- 
+           pip install --upgrade pip
+           pip install Pillow pyscreenshot
+           pip install -r ./requirements.txt
+           
         - name: 'Renew-H'
           env:
-            URL_BASE: ${{ secrets.URL_BASE_W }}
+            URL_BASE: ${{ secrets.URL_BASE_H }}
             USER_ID: ${{ secrets.USER_ID_18 }}
             PASS_WD: ${{ secrets.PASS_WD }}
             BARK_KEY: ${{ secrets.BARK_KEY }}
@@ -38,4 +41,4 @@ jobs:
             FEISHU_TOKEN: ${{ secrets.FEISHU_TOKEN }}
 
           run: |
-            python3 ./main.py
+            xvfb-run python3 ./main.py
